@@ -187,107 +187,106 @@ end
 
 local function bindThrowInput(throwTrack: AnimationTrack, reelTrack: AnimationTrack, Bait: Part, rope: RopeConstraint, crankMotor: Motor6D)
 	local throwEvent = uis.InputBegan:Connect(function(key, gameProcessed)
-		if gameProcessed then return end
+		if gameProcessed then return end -- meaning if they pressed while their chat was on etc. not count it
 
-		if key.UserInputType == Enum.UserInputType.MouseButton1 and not throwTrack.IsPlaying then
-			if activeThread then
-				task.cancel(activeThread)
+		if key.UserInputType == Enum.UserInputType.MouseButton1 and not throwTrack.IsPlaying then --if they pressed the mouse and the throwtrack is not already playing
+			if activeThread then -- check if there is an active thread
+				task.cancel(activeThread)-- cancel if there is
 				-- cancels the active thread even if the rod is already equipped so it can restart
-				activeThread = nil
+				activeThread = nil -- set the thread to nil
 			end
 
-			activeThread = task.spawn(function()
-				throwTrack:Play()
-				throwTrack:GetMarkerReachedSignal("hold"):Wait()
-				-- wait until it gets to the holding part of the anim and freeze it
-				throwTrack:AdjustSpeed(0)
+			activeThread = task.spawn(function() -- create a new thread for it
+				throwTrack:Play() -- play the animation
+				throwTrack:GetMarkerReachedSignal("hold"):Wait() -- wait until the animation event called hold 
+			
+				throwTrack:AdjustSpeed(0) -- freeze the animation
 
 				repeat task.wait() until not uis:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) -- waiting till the mouse is released
 
-				throwTrack:AdjustSpeed(1)
-				throwTrack:GetMarkerReachedSignal("throw"):Wait()
-				-- wait until the throw animation is done
+				throwTrack:AdjustSpeed(1) -- let the animation flow again
+				throwTrack:GetMarkerReachedSignal("throw"):Wait() -- wait until the animation event called throw
+				
 
-				rope.WinchEnabled = true
-				rope.WinchForce = 0
+				rope.WinchEnabled = true -- enable the winc
+				rope.WinchForce = 0 -- set the force of it to 0
 				--enabling the winch and setting the force to 0 so that the rope can get as far as it wants without any pull
 
-				local forceWanted = camera.CFrame.LookVector.Unit * THROW_SPEED
-				Bait.AssemblyLinearVelocity = forceWanted
+				local forceWanted = camera.CFrame.LookVector.Unit * THROW_SPEED -- calculate the necceseary force using the config value and the cameras look vector
+				Bait.AssemblyLinearVelocity = forceWanted -- change the balls linearvelocity to the calculated force
 				--throwing the bait
 
-				while task.wait() do
-					if uis:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
-						rope.WinchForce = WINCH_FORCE
-						if not reelTrack.IsPlaying then
-							reelTrack:Play()
+				while task.wait() do -- open a new loop to check for reels
+					if uis:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then -- if the user is pressing m2
+						rope.WinchForce = WINCH_FORCE -- set the winch force to config'd winch force so it starts pulling
+						if not reelTrack.IsPlaying then -- if the reeling anim is not playing
+							reelTrack:Play() -- start the animation
 						end
 
-						crankMotor.C0 *= CFrame.fromOrientation(CRANK_STEP, 0, 0) -- crank animation
+						crankMotor.C0 *= CFrame.fromOrientation(CRANK_STEP, 0, 0) -- rotating the shaft from its crankmotor weld6d .c0 value to not distort it and only rotate the offset rotation since its welded and in a model
 
-						if rope.Length >= rope.CurrentDistance - REEL_STOP_MARGIN then
+						if rope.Length >= rope.CurrentDistance - REEL_STOP_MARGIN then -- if the bait has come close enough with in the stop margin
 							-- if the bait is close enough to the player then stop the winch
-							rope.WinchEnabled = false
-							reelTrack:Stop()
-							break
+							rope.WinchEnabled = false -- stop the winch so the rope length becomes a set value again
+							reelTrack:Stop() -- stop the animation
+							break -- break the loop
 						end
-					else
-						reelTrack:Stop()
-						rope.WinchForce = 0
+					else --if not
+						reelTrack:Stop() -- stop the reeling animation
+						rope.WinchForce = 0 -- and stop the reeling by setting the winchforce to 0
 					end
 				end
 
-				activeThread = nil
-				--since the thread ended set it back to nil
+				activeThread = nil--since the thread ended set it back to nil			
 			end)
 		end
 	end)
 
-	table.insert(oldEvents, throwEvent)
-	--add the event for cleanup later
+	table.insert(oldEvents, throwEvent)--add the event for cleanup later
+	
 end
 
 local function setupRod(port: Model)
 	
 
-	local animator = getPortAnimator(port)
-	if not animator then return end
+	local animator = getPortAnimator(port) -- get the animation by using the function written above
+	if not animator then return end --if not found return
 
-	local reelTrack = prepareTrack(animator, animFolder.Rod.Reel, Enum.AnimationPriority.Action, true)
-	local throwTrack = prepareTrack(animator, animFolder.Rod.Throw, Enum.AnimationPriority.Action)
-	prepareTrack(animator, animFolder.Rod.Idle, Enum.AnimationPriority.Idle, true):Play()
+	local reelTrack = prepareTrack(animator, animFolder.Rod.Reel, Enum.AnimationPriority.Action, true) -- get the reel track with the function and set its priority to action so it overrides the idle
+	local throwTrack = prepareTrack(animator, animFolder.Rod.Throw, Enum.AnimationPriority.Action) -- get the throw track with the function and set its priority to action so it overrides the idle
+	prepareTrack(animator, animFolder.Rod.Idle, Enum.AnimationPriority.Idle, true):Play() -- get the idle track with the function and set its priority to idle and play it instantly since itll always need to play
 
-	local rodCopy = rep.Assets.Rods["River Reed Rod"]:Clone()
-	local Bait, rope = buildBait(rodCopy)
-	rodCopy.Parent = port
+	local rodCopy = rep.Assets.Rods["River Reed Rod"]:Clone() -- make a copy of the rod
+	local Bait, rope = buildBait(rodCopy) -- get the rope and the bait
+	rodCopy.Parent = port -- parent the rod to the viewport
 
-	local crankMotor = rigRod(rodCopy, port)
-	bindThrowInput(throwTrack, reelTrack, Bait, rope, crankMotor)
+	local crankMotor = rigRod(rodCopy, port) -- get the motor6d by using the rigrod functipon and also rigging the rod
+	bindThrowInput(throwTrack, reelTrack, Bait, rope, crankMotor) -- now throw it all together and fully set it up
 end
 
 local function setupGlock(port: Model)
 	
 
-	local animator = getPortAnimator(port)
-	if not animator then return end
+	local animator = getPortAnimator(port) -- get the animation by using the function written above
+	if not animator then return end --if not found return
 
-	local zoomTrack = prepareTrack(animator, animFolder.Guns.Glock.Zoom, Enum.AnimationPriority.Action, true) -- isnt an animation just a singular frame pose
-	prepareTrack(animator, animFolder.Guns.Glock.Idle, Enum.AnimationPriority.Idle, true):Play()
+	local zoomTrack = prepareTrack(animator, animFolder.Guns.Glock.Zoom, Enum.AnimationPriority.Action, true) -- get the ads zoom track and since its a pose animation with 1 frame set it looped nad make its priority action
+	prepareTrack(animator, animFolder.Guns.Glock.Idle, Enum.AnimationPriority.Idle, true):Play() -- get the idle track with the function and set its priority to idle and play it instantly since itll always need to play
 
-	local zoomPressEvent = uis.InputBegan:Connect(function(input, gameProcessed)
-		if gameProcessed then return end
+	local zoomPressEvent = uis.InputBegan:Connect(function(input, gameProcessed) -- create the event for ads'ing
+		if gameProcessed then return end  -- meaning if they pressed while their chat was on etc. not count it
 
-		if input.UserInputType == Enum.UserInputType.MouseButton2 then
-			zoomTrack:Play(ADS_BLEND_TIME)
-			--ads blend time makes the transition smoother
+		if input.UserInputType == Enum.UserInputType.MouseButton2 then --if they pressed mb2
+			zoomTrack:Play(ADS_BLEND_TIME) -- play the anim ads blend time makes the transition smoother
+			
 		end
 	end)
 
-	local zoomReleaseEvent = uis.InputEnded:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton2 then
-			if zoomTrack.IsPlaying then
-				--ads blend time again makes the transition smoother
-				zoomTrack:Stop(ADS_BLEND_TIME)
+	local zoomReleaseEvent = uis.InputEnded:Connect(function(input) -- another event for stopping ads'ing
+		if input.UserInputType == Enum.UserInputType.MouseButton2 then -- if they let go of mb2
+			if zoomTrack.IsPlaying then -- if the animation is already playing
+				
+				zoomTrack:Stop(ADS_BLEND_TIME) --Pause the anim ads blend time again makes the transition smoother
 			end
 		end
 	end)
@@ -304,43 +303,44 @@ local itemSetups = {
 }
 
 local function setupActivePort(holdingName)
-	cleanPort()
-	--clean up the old port
+	cleanPort() --clean up the old port
+	
 
 	if not holdingName or holdingName == "" then
 		--returns if the player is not holding anything
 		return
 	end
 
-	local template = viewportFolder:FindFirstChild(holdingName, true)
+	local template = viewportFolder:FindFirstChild(holdingName, true) -- look for the templatemodel of the port
 	if not template then
-		return
+		return --if not found return
 	end
 
-	local model = template:Clone() :: Model
+	local model = template:Clone() :: Model -- clone the template
 
 	for _, v in model:GetDescendants() do
 		if v:IsA("BasePart") then
 			v.CanCollide = false
 			v.Anchored = false
+			--set everything inside the model to cancollide = false and anchored = false just in case
 		end
 	end
 
-	model.Parent = portFolder
-	activePort = model
+	model.Parent = portFolder -- parent the model to the port folder
+	activePort = model -- set the activeport to the model we are using
 
-	local hrpPort = activePort:WaitForChild("HumanoidRootPart")
-	hrpPort.Anchored = true
+	local hrpPort = activePort:WaitForChild("HumanoidRootPart") -- find the hrpPort for the model since every port needs to have one didnt make a check for it since i need it to error that must've mean i forgot something
+	hrpPort.Anchored = true -- anchor the hrp so it doesnt fall
 
-	local fakeCam = activePort:WaitForChild("FakeCamera", 3)
+	local fakeCam = activePort:WaitForChild("FakeCamera", 3) -- find the fakecamera
 	if fakeCam then
-		fakeCam.CFrame = camera.CFrame
+		fakeCam.CFrame = camera.CFrame -- if found set it to the players camera
 	end
 
 	local setup = itemSetups[holdingName] -- find the setup function
 	
 	if setup then
-		setup(activePort)
+		setup(activePort) -- if found set up the port
 	end
 end
 
@@ -350,7 +350,7 @@ player:GetAttributeChangedSignal("Holding"):Connect(function()
 	--update once holding attribute changes (it is changed on the server)
 end)
 
-local initialHolding = player:GetAttribute("Holding")
+local initialHolding = player:GetAttribute("Holding") -- find what the player is holding
 if initialHolding and initialHolding ~= "" then
 	setupActivePort(initialHolding)
 	--in case if the event misses it at start
@@ -358,7 +358,7 @@ end
 
 -- sway config
 local swayCFrame = CFrame.new(0,0,0) -- the sway cframe that will be applied none at start
-local lastCamCF = camera.CFrame
+local lastCamCF = camera.CFrame -- the old cam cf that will be updated on every runservice renderstepped event
 
  
 local SWAY_STRENGTH = 0.7 -- multiplier for the sway
@@ -369,23 +369,23 @@ local MAX_SWAY_ANGLE = math.rad(20) -- max angle the camera can sway
 
 
 runService.RenderStepped:Connect(function(dt)
-	local camCF = camera.CFrame
-	local turnCF = lastCamCF:ToObjectSpace(camCF) -- get the relative cframe of the last cams frame to the curent cams cframe
-	lastCamCF = camCF
+	local camCF = camera.CFrame -- get the current camera cframe
+	local turnCF = lastCamCF:ToObjectSpace(camCF) -- get the relative cframe of the current cams frame to the last cams cframe
+	lastCamCF = camCF -- update the old cframe to the current cframe
+	-- put all this above the return since i dont want it to jerk or snap
 	
-	
-	if not activePort then return end
+	if not activePort then return end -- if there is no active port return
 
-	local fakeCamera = activePort:FindFirstChild("FakeCamera")
-	if not fakeCamera then return end
+	local fakeCamera = activePort:FindFirstChild("FakeCamera") -- find the fakecamera
+	if not fakeCamera then return end -- if not found return
 
 	
-	local pitch, yaw = turnCF:ToEulerAnglesYXZ() -- get the angles of it in radians
+	local pitch, yaw = turnCF:ToEulerAnglesYXZ() -- get the angles of it in radians ( i didnt need to use the z which is roll since the camera will never rotate that way i used used the yaw for it)
 	local targetSwayPitch = math.clamp(-pitch * SWAY_STRENGTH, -MAX_SWAY_ANGLE, MAX_SWAY_ANGLE) -- clamp it so it doesnt get too extreme
 	local targetSwayYaw = math.clamp(-yaw * SWAY_STRENGTH, -MAX_SWAY_ANGLE, MAX_SWAY_ANGLE) -- clamp it so it doesnt get too extreme
 	
 
-	local targetSwayCF = CFrame.Angles(targetSwayPitch, targetSwayYaw, targetSwayYaw * 0.7) -- apply everything to a cframe
+	local targetSwayCF = CFrame.Angles(targetSwayPitch, targetSwayYaw, targetSwayYaw * 0.7) -- apply everything to a cframe ( to add a roll to the viewport just used the yaw)
 	swayCFrame = swayCFrame:Lerp(targetSwayCF, math.clamp(dt * SWAY_SMOOTHNESS, 0, 1)) -- slowly go towards the target cframe so its smooth
 
 	
