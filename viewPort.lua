@@ -1,7 +1,6 @@
 -- Connected Discord-GitHub
 -- everything is grouped in this order: services, constants, references, tool tables, state,
 -- then the glock section, the fishing rod section, the viewport section, each section starts with its own animations
--- and last the startup which is the only procedural code in the script
 
 --// Services
 local rep = game:GetService("ReplicatedStorage") -- Getting replicated storage from gameservice so that even if the name changes there would be no problem
@@ -137,7 +136,7 @@ local function buildBait(rodCopy: Model): (Part, RopeConstraint) -- making the b
 	drag.Attachment0 = dragAttachment -- connecting its attachment
 	drag.MaxForce = 15 -- set the maxforce to 15 so that it doesnt stop instantly
 	drag.VectorVelocity = Vector3.zero -- the target velocity which the velocity is trying to achieve
-	drag.RelativeTo = Enum.ActuatorRelativeTo.World --isnt really needed since vectorVelocity is zero but i like to keep it
+	drag.RelativeTo = Enum.ActuatorRelativeTo.World -- isnt really needed since vectorVelocity is zero but i like to keep it
 	drag.Parent = Bait -- parenting it to bait for it to get destroyed along the rod
 
 	return Bait, rope -- returning the bait and the rope for use
@@ -224,12 +223,12 @@ local function bindThrowInput(throwTrack: AnimationTrack, reelTrack: AnimationTr
 					end
 				end
 
-				activeThread = nil--since the thread ended set it back to nil
+				activeThread = nil --since the thread ended set it back to nil
 			end)
 		end
 	end)
 
-	table.insert(oldEvents, throwEvent)--add the event for cleanup later
+	table.insert(oldEvents, throwEvent) --add the event for cleanup later
 
 end
 
